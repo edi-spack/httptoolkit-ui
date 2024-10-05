@@ -105,8 +105,25 @@ export class AccountStore {
         console.log('Account store initialized');
     });
 
+    // Hardcoded user data to fake being Pro
+    private mockUserData = {
+        user: {
+            email: 'hello@example.com' as string,
+            featureFlags: [] as string[],
+            banned: false as boolean
+        },
+        subscription: {
+            status: 'active' as ('active' | 'trialing' | 'past_due' | 'deleted'),
+            canManageSubscription: true as boolean,
+            expiry: new Date(2999, 12, 31),
+            sku: 'pro-perpetual' as ('pro-monthly' | 'pro-annual' | 'team-monthly' | 'team-annual' | 'pro-perpetual'),
+            lastReceiptUrl: 'about:blank' as string,
+            updateBillingDetailsUrl: 'about:blank' as string
+        },
+    } as const;
+
     @observable
-    private user: User = getLastUserData();
+    private user: User = this.mockUserData.user;
 
     @observable
     accountDataLastUpdated = 0;
@@ -116,17 +133,15 @@ export class AccountStore {
     isAccountUpdateInProcess = false;
 
     @computed get userEmail() {
-        return this.user.email;
+        return this.mockUserData.user.email;
     }
 
     @computed get userSubscription() {
-        return this.isPaidUser || this.isPastDueUser
-            ? this.user.subscription
-            : undefined;
+        return this.mockUserData.subscription;
     }
 
     private updateUser = flow(function * (this: AccountStore) {
-        this.user = yield getLatestUserData();
+        this.user = this.mockUserData.user;
         this.accountDataLastUpdated = Date.now();
 
         // Include the user email in error reports whilst they're logged in.
@@ -148,67 +163,31 @@ export class AccountStore {
     private selectedPlan: SKU | undefined;
 
     @computed get isLoggedIn() {
-        return !!this.user.email;
+        return true;
     }
 
     @computed get featureFlags() {
-        return _.clone(this.user.featureFlags);
+        return _.clone(this.mockUserData.user.featureFlags);
     }
 
     @computed private get isStatusUnexpired() {
-        const subscriptionExpiry = this.user.subscription?.expiry;
-        const subscriptionStatus = this.user.subscription?.status;
-
-        const expiryMargin = subscriptionStatus === 'active'
-            // If we're offline during subscription renewal, and the sub was active last
-            // we checked, then we might just have outdated data, so leave extra slack.
-            // This gives a week of offline usage. Should be enough, given that most HTTP
-            // development needs network connectivity anyway.
-            ? 1000 * 60 * 60 * 24 * 7
-            : 0;
-
-        return !!subscriptionExpiry &&
-            subscriptionExpiry.valueOf() + expiryMargin > Date.now();
+        return true;
     }
 
     @computed get isPaidUser() {
-        // ------------------------------------------------------------------
-        // You could set this to true to become a paid user for free.
-        // I'd rather you didn't. HTTP Toolkit takes time & love to build,
-        // and I can't do that if it doesn't pay my bills!
-        //
-        // Fund open source - if you want Pro, help pay for its development.
-        // Can't afford it? Get in touch: tim@httptoolkit.com.
-        // ------------------------------------------------------------------
-
-        // If you're before the last expiry date, your subscription is valid,
-        // unless it's past_due, in which case you're in a strange ambiguous
-        // zone, and the expiry date is the next retry. In that case, your
-        // status is unexpired, but _not_ considered as valid for Pro features.
-        // Note that explicitly cancelled ('deleted') subscriptions are still
-        // valid until the end of the last paid period though!
-        return this.user.subscription?.status !== 'past_due' &&
-            this.isStatusUnexpired;
+        return true;
     }
 
     @computed get isPastDueUser() {
-        // Is the user a subscribed user whose payments are failing? Keep them
-        // in an intermediate state so they can fix it (for now, until payment
-        // retries fail, and their subscription cancels & expires completely).
-        return this.user.subscription?.status === 'past_due' &&
-            this.isStatusUnexpired;
+        return false;
     }
 
     @computed get userHasSubscription() {
-        return this.isPaidUser || this.isPastDueUser;
+        return true;
     }
 
     @computed get mightBePaidUser() {
-        // Like isPaidUser, but returns true for users who have subscription data
-        // locally that's expired, until we successfully make a first check.
-        return this.user.subscription?.status &&
-            this.user.subscription?.status !== 'past_due' &&
-            (this.isStatusUnexpired || this.accountDataLastUpdated === 0);
+        return true;
     }
 
     getPro = flow(function * (this: AccountStore, source: string) {
@@ -358,7 +337,7 @@ export class AccountStore {
     }
 
     get canManageSubscription() {
-        return !!this.userSubscription?.canManageSubscription;
+        return true;
     }
 
     cancelSubscription = flow(function * (this: AccountStore) {
